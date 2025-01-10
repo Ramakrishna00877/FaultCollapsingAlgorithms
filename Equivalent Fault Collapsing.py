@@ -1,116 +1,51 @@
-#Equivalent Fault Collapsing
+#Finding equivalent fault collapsing list and collapsing ratio
 
-def read_netlist(file_path):
-    with open(file_path) as f:
-        netlist = f.readlines()
-    return netlist
+class equivalent_fault:
+    def __init__(self,filename):
+        self.filename = filename+'.txt'
+        print(filename)
 
-def process_netlist(netlist):
-    m = [line.split() for line in netlist]
-    return m
-
-def get_fanout_list(m):
-    return [line for line in m if line[0] == 'FANOUT']
-
-def get_output_nodes(m):
-    output_nodes = []
-    for line in m:
-        if line[0] == 'OUTPUT':
-            output_nodes.extend(int(node) for node in line[1:])
-    return output_nodes
-
-def categorize_lines(m):
-    out_in_fanout_list = []
-    gates_list = []
-    input_list = []
-    for line in m:
-        if line[0] in ['FANOUT', 'OUTPUT', 'INPUT']:
-            out_in_fanout_list.append(line)
-        else:
-            gates_list.append(line)
-        if line[0] == 'INPUT':
-            input_list.extend(int(node) for node in line[1:])
-    return gates_list, out_in_fanout_list, input_list
-
-def get_output_wires(gates_list):
-    return sorted((int(gate[1]) for gate in gates_list), reverse=True)
-
-def get_unique_wires(m):
-    wires = [int(node) for line in m for node in line[1:]]
-    return list(set(wires))
-
-def initialize_fault_list(wires_list):
-    Fault = [f"sa0_{i+1}" for i in range(len(wires_list))] + [f"sa1_{i+1}" for i in range(len(wires_list))]
-    Values_sa = ['Present'] * len(Fault)
-    return dict(zip(Fault, Values_sa))
-
-def equivalent_fault_collapsing_rules(gate, out1, in_val):
-    fault_to_remove = []
-    if gate in ['AND', 'NAND']:
-        fault_to_remove.extend([f'sa0_{in_val}'])  # Equivalence for AND/OR gates
-    elif gate in ['OR', 'NOR']:
-        fault_to_remove.extend([f'sa1_{in_val}'])
-    return fault_to_remove
-
-def find_gate(gates_list, gate_wire):
-    for gate in gates_list:
-        if int(gate[1]) == gate_wire:
-            return gate[0]
-    return None
-
-def is_output_of_gate(output_wires, num):
-    return int(num) in output_wires
-
-def find_gate_list(gates_list, gate_wire):
-    for gate in gates_list:
-        if int(gate[1]) == gate_wire:
-            return gate
-    return None
-
-def find_gate_input(gate):
-    return [int(node) for node in gate[2:]]
-
-def is_fanout(fanout_list, num):
-    for fanout in fanout_list:
-        if int(fanout[1]) == num:
-            return True
-    return False
-
-def find_fanout(fanout_list, node):
-    for fanout in fanout_list:
-        if int(fanout[1]) == node:
-            return [int(fanout[i]) for i in range(2, len(fanout))]
-    return []
-
-def return_in_if_fanout(is_fanout, num1, num2):
-    return num1 if is_fanout(num1) else num2
-
-def apply_fault_collapsing(gates_list, output_wires, fanout_list, fault_dict):
-    for out in output_wires:
-        gate_str = find_gate(gates_list, out)
-        gate_in = find_gate_input(find_gate_list(gates_list, out))
-        for in_val in gate_in:
-            equiv_faults = equivalent_fault_collapsing_rules(gate_str, out, in_val)
-            for fault in equiv_faults:
-                fault_dict[fault] = 'Collapsed'
+    def read_netlist(self):
+        m=[]
+        with open(self.filename) as f:
+            netlist = f.readlines()
+        for i in netlist:
+            m.append(i.split())
+        return m
+    def total_fault_list(self):
+        read_netlist=self.read_netlist()
+        total_fault_list=[]
+        node_points=[]
+        for i in read_netlist:
+            node_points.append(i[1:])
+        node_points=set(int(item) for sublist in node_points for item in sublist)
+        node_points=list(node_points)
+        node_points.sort()
+        for i in node_points:
+            total_fault_list.append("sa0_"+str(i))
+            total_fault_list.append("sa1_"+str(i))
+        return total_fault_list
     
-    return fault_dict
+    def equivalent_fault_collapsing(self):
+        read_netlist=self.read_netlist()
+        final_fault_list=self.total_fault_list()
+        for i in read_netlist:
+            if (i[0]=="NAND") or (i[0]=="AND"):
+                for j in i[2:]:
+                    final_fault_list.remove("sa0_"+j)
+            elif (i[0]=="NOR") or (i[0]=="OR"):
+                for j in i[2:]:
+                    final_fault_list.remove("sa1_"+j)
+            elif i[0]==("NOT"):
+                for j in i[2:]:
+                    final_fault_list.remove("sa0_"+j)
+                    final_fault_list.remove("sa1_"+j)
+                    
+        return final_fault_list
 
-def get_collapsed_faults(fault_dict):
-    return [key for key, value in fault_dict.items() if value != 'Collapsed']
+        
+obj=equivalent_fault("Netlist3")
+print("Total Fault list: ",obj.total_fault_list())
+print("Equivalent Fault Collapsed list: ",obj.equivalent_fault_collapsing())
+print("Equivalent Fault Collapsing ratio: ",(len(obj.equivalent_fault_collapsing())/len(obj.total_fault_list())))
 
-netlist = read_netlist(input("Enter Netlist File name: ")+'.txt')
-m = process_netlist(netlist)
-fanout_list = get_fanout_list(m)
-output_nodes = get_output_nodes(m)
-gates_list, out_in_fanout_list, input_list = categorize_lines(m)
-output_wires = get_output_wires(gates_list)
-wires_list = get_unique_wires(m)
-fault_dict = initialize_fault_list(wires_list)
-fault_dict = apply_fault_collapsing(gates_list, output_wires, fanout_list, fault_dict)
-collapsed_fault_key_list = get_collapsed_faults(fault_dict)
-collapse_ratio=len(collapsed_fault_key_list)/len(fault_dict.keys())
-
-print("Initial Fault List:", list(fault_dict.keys()))
-print("Equivalent Collapsed Fault List:", collapsed_fault_key_list)
-print("Collapse Ratio:", collapse_ratio)
